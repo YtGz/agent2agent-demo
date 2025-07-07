@@ -300,7 +300,8 @@ class RiskAgent(BaseAgent):
         ai_decision = await self.process_message(decision_context)
         
         # Parse AI decision
-        approved = "APPROVE" in ai_decision.upper()
+        ai_decision_str = str(ai_decision)
+        approved = "APPROVE" in ai_decision_str.upper()
         action = "APPROVE" if approved else "REJECT"
         
         return {

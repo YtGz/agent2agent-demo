@@ -33,12 +33,12 @@ async def demo_a2a_protocol():
             print(f"  📊 {agent_name}: {caps['name']}")
             print(f"     Functions: {', '.join(caps['capabilities'].get('functions', []))}")
         
-        # Demo 1: Single stock analysis with A2A communication
+        # Demo 1: Full trading workflow with execution
         print(f"\n" + "="*60)
-        print("DEMO 1: Single Stock Analysis with A2A Protocol")
+        print("DEMO 1: Full Trading Workflow with A2A Protocol & Execution")
         print("="*60)
         
-        result = await coordinator.analyze_and_assess_symbol("AAPL")
+        result = await coordinator.full_trading_workflow("AAPL")
         
         if "error" not in result:
             market_data = result["market_analysis"]["market_data"]
@@ -54,6 +54,13 @@ async def demo_a2a_protocol():
             print(f"   Decision: {decision.get('action', 'N/A')}")
             print(f"   Position Size: {decision.get('position_size', 0)} shares")
             print(f"   Risk Level: {decision.get('risk_level', 'N/A')}")
+            
+            execution_result = result.get("execution_result", {})
+            print(f"\n⚡ Execution Results:")
+            print(f"   Status: {execution_result.get('status', 'N/A')}")
+            if execution_result.get('status') == 'SUCCESS':
+                print(f"   Order ID: {execution_result.get('order_id', 'N/A')}")
+                print(f"   Executed: {execution_result.get('quantity', 0)} shares")
         
         # Demo 2: Full watchlist scan with A2A protocol
         print(f"\n" + "="*60)
@@ -96,6 +103,28 @@ async def demo_a2a_protocol():
         print(f"   Max Portfolio Risk: {risk_params['max_portfolio_risk']:.1%}")
         print(f"   Max Position Size: {risk_params['max_position_size']:.1%}")
         print(f"   Max Sector Exposure: {risk_params['max_sector_exposure']:.1%}")
+        
+        # Demo 5: Execution Performance
+        print(f"\n" + "="*60)
+        print("DEMO 5: Execution Performance Summary")
+        print("="*60)
+        
+        execution_status = await coordinator.get_execution_status()
+        if "error" not in execution_status:
+            metrics = execution_status['execution_metrics']
+            print(f"⚡ Execution Metrics:")
+            print(f"   Total Orders: {metrics['total_orders']}")
+            print(f"   Filled Orders: {metrics['filled_orders']}")
+            print(f"   Fill Rate: {metrics['fill_rate_percent']:.1f}%")
+            print(f"   Active Orders: {metrics['active_orders']}")
+            
+            if execution_status.get('recent_orders'):
+                print(f"\n📋 Recent Orders:")
+                for order in execution_status['recent_orders'][:3]:
+                    if "error" not in order:
+                        print(f"   {order.get('symbol', 'N/A')}: {order.get('status', 'N/A')} - {order.get('side', 'N/A')} {order.get('quantity', 0)} shares")
+        else:
+            print(f"⚠️  Execution status error: {execution_status['error']}")
         
         print(f"\n" + "="*60)
         print("🎉 A2A Protocol Demo Complete!")

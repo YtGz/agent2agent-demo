@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from .market_agent import MarketAgent
 from .risk_agent import RiskAgent
+from .execution_agent import ExecutionAgent
 
 
 class AgentCoordinator:
@@ -16,12 +17,14 @@ class AgentCoordinator:
         # Initialize agents
         self.market_agent = MarketAgent(alpaca_api_key, alpaca_secret_key)
         self.risk_agent = RiskAgent(alpaca_api_key, alpaca_secret_key)
+        self.execution_agent = ExecutionAgent(alpaca_api_key, alpaca_secret_key)
         
         # Communication logs for A2A protocol demonstration
         self.communication_log = []
         self.agent_registry = {
             "market_agent": self.market_agent,
-            "risk_agent": self.risk_agent
+            "risk_agent": self.risk_agent,
+            "execution_agent": self.execution_agent
         }
     
     def log_communication(self, from_agent: str, to_agent: str, message_type: str, 
@@ -47,6 +50,96 @@ class AgentCoordinator:
             status = "✅ APPROVED" if response["approved"] else "❌ REJECTED"
             print(f"   Response: {status}")
     
+    async def full_trading_workflow(self, symbol: str) -> Dict[str, Any]:
+        """Complete workflow: Market analysis → Risk assessment → Execution"""
+        
+        print(f"\n🎯 Starting FULL TRADING WORKFLOW for {symbol}")
+        print("=" * 60)
+        
+        # Step 1: Market Agent analyzes the symbol
+        print(f"📊 Market Agent analyzing {symbol}...")
+        market_analysis = await self.market_agent.analyze_stock(symbol)
+        
+        if "error" in market_analysis:
+            return {"error": f"Market analysis failed: {market_analysis['error']}"}
+        
+        # Log A2A communication
+        self.log_communication(
+            from_agent="market_agent",
+            to_agent="risk_agent", 
+            message_type="TRADING_SIGNAL",
+            content={
+                "symbol": symbol,
+                "signal": market_analysis.get("ai_analysis", {}).get("signal", "HOLD"),
+                "confidence": market_analysis.get("ai_analysis", {}).get("confidence", 0.5),
+                "price": market_analysis.get("market_data", {}).get("price", 0)
+            }
+        )
+        
+        # Step 2: Risk Agent evaluates the signal
+        print(f"🛡️  Risk Agent evaluating signal...")
+        risk_evaluation = await self.risk_agent.evaluate_trade_signal(market_analysis)
+        
+        if "error" in risk_evaluation:
+            return {"error": f"Risk evaluation failed: {risk_evaluation['error']}"}
+        
+        # Log A2A response
+        self.log_communication(
+            from_agent="risk_agent",
+            to_agent="execution_agent",
+            message_type="RISK_DECISION", 
+            content=risk_evaluation.get("decision", {}),
+            response=risk_evaluation.get("decision", {})
+        )
+        
+        # Step 3: Execution Agent executes if approved
+        execution_result = {"status": "SKIPPED", "reason": "No execution needed"}
+        
+        if risk_evaluation.get("decision", {}).get("approved", False):
+            print(f"⚡ Execution Agent executing trade...")
+            execution_result = await self.execution_agent.execute_approved_trade(risk_evaluation)
+            
+            # Log A2A execution communication
+            self.log_communication(
+                from_agent="execution_agent",
+                to_agent="reporting_agent",
+                message_type="EXECUTION_RESULT",
+                content={
+                    "symbol": symbol,
+                    "status": execution_result.get("status", "UNKNOWN"),
+                    "order_id": execution_result.get("order_id", "N/A"),
+                    "quantity": execution_result.get("quantity", 0)
+                },
+                response=execution_result
+            )
+        else:
+            print(f"❌ Trade not approved - no execution")
+        
+        # Step 4: Compile complete workflow result
+        workflow_result = {
+            "symbol": symbol,
+            "timestamp": datetime.now().isoformat(),
+            "workflow_status": "COMPLETED",
+            "market_analysis": market_analysis,
+            "risk_evaluation": risk_evaluation,
+            "execution_result": execution_result,
+            "final_status": execution_result.get("status", "NOT_EXECUTED"),
+            "a2a_communications": len(self.communication_log)
+        }
+        
+        # Print summary
+        decision = risk_evaluation.get("decision", {})
+        if execution_result.get("status") == "SUCCESS":
+            print(f"✅ TRADE EXECUTED: {execution_result.get('quantity', 0)} shares of {symbol}")
+            print(f"   Order ID: {execution_result.get('order_id', 'N/A')}")
+            print(f"   Expected Price: ${execution_result.get('expected_price', 0):.2f}")
+        elif decision.get("approved", False):
+            print(f"⚠️  EXECUTION FAILED: {execution_result.get('reason', 'Unknown error')}")
+        else:
+            print(f"❌ TRADE REJECTED: {decision.get('reasoning', 'Risk assessment rejected')}")
+        
+        return workflow_result
+
     async def analyze_and_assess_symbol(self, symbol: str) -> Dict[str, Any]:
         """Full workflow: Market analysis → Risk assessment → Decision"""
         
@@ -189,3 +282,7 @@ class AgentCoordinator:
     async def get_portfolio_status(self) -> Dict[str, Any]:
         """Get comprehensive portfolio status from Risk Agent"""
         return await self.risk_agent.get_portfolio_summary()
+    
+    async def get_execution_status(self) -> Dict[str, Any]:
+        """Get execution performance summary from Execution Agent"""
+        return await self.execution_agent.get_execution_summary()
